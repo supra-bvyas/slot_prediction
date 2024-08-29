@@ -1,0 +1,26 @@
+[package]
+name = "slot_predict"
+version = "1.0.0"
+authors = []
+
+[addresses]
+
+my_address="0x04bbc2ea6b9cfa92036cc2a3c3e7b9d8b9d7e0c16d7bd6bf6147b838cffe3ccc"
+user="0x963e56dfa1f02d69c28330991854423fc2a116241d1227c3fee06910f9a5a867"
+user_2="0x17b606ebccc8b7a636b62c1ee758187575b5fa0527cce97e678431e1de8303df"
+supra_framework="0x1"
+
+[dev-addresses]
+
+[dev-dependencies]
+
+[dependencies.SupraFramework]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "supra.aptos-core-v1.10"
+subdir = "aptos-move/framework/supra-framework"
+
+[dependencies.AptosToken]
+git = "https://github.com/Entropy-Foundation/aptos-core.git"
+rev = "supra.aptos-core-v1.10"
+subdir = "aptos-move/framework/aptos-token"
+
