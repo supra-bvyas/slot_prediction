@@ -13,15 +13,6 @@ module my_address::slot_prediction{
     use std::string::{Self,String};
     use supra_framework::supra_coin::SupraCoin;
 
-    // Constants for each prediction type
-    const BTC: u64 = 1;
-    const ETH: u64 = 2;
-    const SOL: u64 = 3;
-    const BNB: u64 = 4;
-    const AVAX: u64 = 5;
-    const DOGE: u64 = 6;
-    const OTHER:u64 =7;
-
     ///The slot id doesnot exist.
     const ERROR_SLOT_ID_NOT_PRESENT:u64=1;
     ///No prediction with particular slot and user address found.
@@ -53,7 +44,6 @@ module my_address::slot_prediction{
     }
 
     struct SlotDetails has key,store,copy,drop{
-        coin_type:u8,
         start_time:u64,
         end_time:u64,
         final_price:u64,
@@ -86,7 +76,7 @@ module my_address::slot_prediction{
         });
     }
 
-    public entry fun create_slot(account:&signer,slot_id:u256,coin_type:u8,start_time:u64,end_time:u64,)acquires GlobalVars{
+    public entry fun create_slot(account:&signer,slot_id:u256,start_time:u64,end_time:u64,)acquires GlobalVars{
         assert!(exists<GlobalVars>(@my_address),error::unavailable(ERROR_CONTRACT_NOT_INITIALISED));
         assert!(end_time > start_time,error::aborted(ERROR_START_TIME_SHOULD_BE_GREATER_THAN_END_TIME));
         let global_vars=borrow_global_mut<GlobalVars>(@my_address);
@@ -94,7 +84,6 @@ module my_address::slot_prediction{
         let slot_table=&mut global_vars.slot_id_to_slot_details;
         //Will automatically revert if the slot_id is already created
         table::add(slot_table,slot_id,SlotDetails{
-            coin_type,
             start_time,
             end_time,
             final_price:0,
@@ -116,8 +105,8 @@ module my_address::slot_prediction{
             vector::push_back(&mut add_vector,account_addr);
             table::add(&mut global_vars.slot_to_user_addresses,slot_id,add_vector);
         }else{
-        let slot_user_addresses=table::borrow(& global_vars.slot_to_user_addresses,slot_id);
-        assert!(!vector::contains(slot_user_addresses,&account_addr),error::already_exists(ERROR_ALREADY_PRESENT_IN_SLOT));
+            let slot_user_addresses=table::borrow(& global_vars.slot_to_user_addresses,slot_id);
+            assert!(!vector::contains(slot_user_addresses,&account_addr),error::already_exists(ERROR_ALREADY_PRESENT_IN_SLOT));
         };
 
         transferring_coins(account,coins,global_vars.auth_cum_lock);
@@ -134,24 +123,24 @@ module my_address::slot_prediction{
             vector::push_back(&mut add_vector,pred);
             table::add(&mut global_vars.user_to_prediction,account_addr,add_vector);
         }else{
-        let prediction_vectors=table::borrow_mut( &mut global_vars.user_to_prediction,account_addr);
-        vector::push_back(prediction_vectors,pred);
+            let prediction_vectors=table::borrow_mut( &mut global_vars.user_to_prediction,account_addr);
+            vector::push_back(prediction_vectors,pred);
         };
 
     }
 
-     fun get_prediction_and_slot(user_address:address,slot_id:u256):(PredictionInfo,SlotDetails)acquires GlobalVars{
+    fun get_prediction_and_slot(user_address:address,slot_id:u256):(PredictionInfo,SlotDetails)acquires GlobalVars{
         let global_vars=borrow_global<GlobalVars>(@my_address);
         assert!(table::contains(&global_vars.slot_id_to_slot_details,slot_id),error::not_found(ERROR_SLOT_ID_NOT_PRESENT));
 
         let slot_user_addresses=table::borrow(&global_vars.slot_to_user_addresses,slot_id);
         assert!(vector::contains(slot_user_addresses,&user_address),error::not_found(ERROR_NO_PREDICTION_FOUND));
 
-         let slot_details=table::borrow(&global_vars.slot_id_to_slot_details,slot_id);
-         // check on the start time and the end time
-         assert!(timestamp::now_seconds()>slot_details.start_time && timestamp::now_seconds()>slot_details.end_time,error::permission_denied(ERROR_PREDICTION_TIME_IS_NOT_MET));
+        let slot_details=table::borrow(&global_vars.slot_id_to_slot_details,slot_id);
+        // check on the start time and the end time
+        assert!(timestamp::now_seconds()>slot_details.start_time && timestamp::now_seconds()>slot_details.end_time,error::permission_denied(ERROR_PREDICTION_TIME_IS_NOT_MET));
 
-         assert!(slot_details.final_price>0,error::aborted(ERROR_FINAL_PRICE_NOT_SET));
+        assert!(slot_details.final_price>0,error::aborted(ERROR_FINAL_PRICE_NOT_SET));
 
         let all_predictions=table::borrow(&global_vars.user_to_prediction,user_address);
         let value=vector::filter(*all_predictions,|prediction|  {
@@ -232,17 +221,14 @@ module my_address::slot_prediction{
         let slot_id_1=1;
         let slot_id_2=2;
 
-        let coin_type_1=1;//BTC
-        let coin_type_2=2;//ETH
-
         let start_time_1=timestamp::now_seconds() ;
         let end_time_1=timestamp::now_seconds() + 60*60;
         // let up_from_predictedprice_1=true;
         // let up_from_predictedprice_2=false;
         let reference_price_1=100000;
         //Creating MULTIPLE slot
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,coin_type_1,start_time_1,end_time_1);
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_2,coin_type_2,start_time_1,end_time_1);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,end_time_1);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_2,start_time_1,end_time_1);
         // Prediction on first slot
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_1,reference_price_1);
         my_address::slot_prediction::create_prediction(user_2,slot_id_1,coins_2,reference_price_1);
@@ -299,16 +285,13 @@ module my_address::slot_prediction{
 
         let slot_id_1=1;
 
-        let coin_type_1=1;//BTC
-        let coin_type_2=2;//ETH
-
         let start_time_1=timestamp::now_seconds() ;
         let end_time_1=timestamp::now_seconds() + 60*60;
         let up_from_predictedprice_1=true;
         let up_from_predictedprice_2=false;
         let reference_price_1=100000;
         //Creating slot
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,coin_type_1,start_time_1,end_time_1);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,end_time_1);
         // Predictions on first slot
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_1,reference_price_1);
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_2,reference_price_1);
