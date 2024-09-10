@@ -49,8 +49,8 @@ module my_address::slot_prediction{
         slot_id:u256,
         start_time:u64,
         end_time:u64,
-        start_price:u64,
-        final_price:u64,
+        start_price:String,
+        final_price:String,
         options:vector<String>
 
     }
@@ -80,7 +80,7 @@ module my_address::slot_prediction{
         });
     }
 
-    public entry fun create_slot(account:&signer,slot_id:u256,start_time:u64,end_time:u64,start_price:u64,options:vector<String>)acquires GlobalVars{
+    public entry fun create_slot(account:&signer,slot_id:u256,start_time:u64,end_time:u64,start_price:String,options:vector<String>)acquires GlobalVars{
         assert!(exists<GlobalVars>(@my_address),error::unavailable(ERROR_CONTRACT_NOT_INITIALISED));
         assert!(end_time > start_time,error::aborted(ERROR_START_TIME_SHOULD_BE_GREATER_THAN_END_TIME));
         let global_vars=borrow_global_mut<GlobalVars>(@my_address);
@@ -91,7 +91,7 @@ module my_address::slot_prediction{
             start_time,
             end_time,
             start_price,
-            final_price:0,
+            final_price:string::utf8(b"0"),
             options
         };
         //Will automatically revert if the slot_id is already created
@@ -137,28 +137,6 @@ module my_address::slot_prediction{
 
     }
 
-    fun get_prediction_and_slot(user_address:address,slot_id:u256):(PredictionInfo,SlotDetails)acquires GlobalVars{
-        let global_vars=borrow_global<GlobalVars>(@my_address);
-        assert!(table::contains(&global_vars.slot_id_to_slot_details,slot_id),error::not_found(ERROR_SLOT_ID_NOT_PRESENT));
-
-        let slot_user_addresses=table::borrow(&global_vars.slot_to_user_addresses,slot_id);
-        assert!(vector::contains(slot_user_addresses,&user_address),error::not_found(ERROR_NO_PREDICTION_FOUND));
-
-        let slot_details=table::borrow(&global_vars.slot_id_to_slot_details,slot_id);
-        // check on the start time and the end time
-        assert!(timestamp::now_seconds()>slot_details.start_time && timestamp::now_seconds()>slot_details.end_time,error::permission_denied(ERROR_PREDICTION_TIME_IS_NOT_MET));
-
-        assert!(slot_details.final_price>0,error::aborted(ERROR_FINAL_PRICE_NOT_SET));
-
-        let all_predictions=table::borrow(&global_vars.user_to_prediction,user_address);
-        let value=vector::filter(*all_predictions,|prediction|  {
-            let prediction:&PredictionInfo=prediction;
-            prediction.slot_id == slot_id
-        } );
-        (vector::pop_back(&mut value),*slot_details)
-    }
-
-
     #[view]
     public fun get_user_data(user_address:address,slot_id:u256):(PredictionInfo,SlotDetails)acquires GlobalVars{
         let global_vars=borrow_global<GlobalVars>(@my_address);
@@ -176,13 +154,13 @@ module my_address::slot_prediction{
         (vector::pop_back(&mut value),*slot_details)
     }
 
-    public entry fun update_final_price(account:&signer,slot_id:u256,final_price:u64)acquires GlobalVars{
+    public entry fun update_final_price(account:&signer,slot_id:u256,final_price:String)acquires GlobalVars{
         let global_vars=borrow_global_mut<GlobalVars>(@my_address);
         assert!(global_vars.auth_cum_lock==signer::address_of(account),error::permission_denied(ERROR_NOT_AUTH));
         assert!(table::contains(&global_vars.slot_id_to_slot_details,slot_id),error::not_found(ERROR_SLOT_ID_NOT_PRESENT));
         let slot_table=&mut global_vars.slot_id_to_slot_details;
         let slot_details=table::borrow_mut(slot_table,slot_id);
-        assert!(slot_details.final_price ==0,error::permission_denied(ERROR_FINAL_PRICE_IS_ALREADY_SET));
+        assert!(slot_details.final_price ==string::utf8(b"0"),error::permission_denied(ERROR_FINAL_PRICE_IS_ALREADY_SET));
         slot_details.final_price=final_price;
     }
 
@@ -238,15 +216,16 @@ module my_address::slot_prediction{
         let start_time=20000;
 
         let start_time_1=timestamp::now_seconds() ;
-        let end_time_1=timestamp::now_seconds() + 60*60;
+        let start_price=string::utf8(b"23.458416");
+
         let options=vector::empty<String>();
         vector::push_back(&mut options,string::utf8(b"+ 9-10 %"));
         vector::push_back(&mut options,string::utf8(b"+ 1-2 %"));
         vector::push_back(&mut options,string::utf8(b"- 0-4 %"));
         let option_nos_1=0;
         //Creating MULTIPLE slot
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,start_time,end_time_1,options);
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_2,start_time_1,start_time,end_time_1,options);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,start_time,start_price,options);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_2,start_time_1,start_time,start_price,options);
         // Prediction on first slot
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_1,option_nos_1);
         my_address::slot_prediction::create_prediction(user_2,slot_id_1,coins_2,option_nos_1);
@@ -259,10 +238,10 @@ module my_address::slot_prediction{
     #[test(supra_framework=@supra_framework,lock_cum_auth_acc=@my_address,user=@user,user_2=@user_2)]
     public entry fun update_final_price_any_time(supra_framework:&signer,lock_cum_auth_acc:&signer,user:&signer,user_2:&signer) acquires GlobalVars{
         create_multiple_predictions_on_multiple_slots_test(supra_framework,lock_cum_auth_acc,user,user_2);
-        update_final_price(lock_cum_auth_acc,1,8000000000);
+        update_final_price(lock_cum_auth_acc,1,string::utf8(b"8000000000"));
         let global_vars=borrow_global<GlobalVars>(@my_address);
         let slot_details=table::borrow(&global_vars.slot_id_to_slot_details,1);
-        assert!(slot_details.final_price==8000000000,123);
+        assert!(slot_details.final_price==string::utf8(b"8000000000"),123);
         let (user_prediction,user_slot)=get_user_data(signer::address_of(user),1);
         timestamp::fast_forward_seconds(60*60 + 1);
         print(&user_prediction);
@@ -274,22 +253,22 @@ module my_address::slot_prediction{
     #[expected_failure(abort_code=327692)]
     public entry fun update_final_price_again_fail_test(supra_framework:&signer,lock_cum_auth_acc:&signer,user:&signer,user_2:&signer) acquires GlobalVars{
         create_multiple_predictions_on_multiple_slots_test(supra_framework,lock_cum_auth_acc,user,user_2);
-        update_final_price(lock_cum_auth_acc,1,8000000000);
-        update_final_price(lock_cum_auth_acc,1,8000000000);
+        update_final_price(lock_cum_auth_acc,1,string::utf8(b"8000000000"));
+        update_final_price(lock_cum_auth_acc,1,string::utf8(b"8000000000"));
     }
 
     #[test(supra_framework=@supra_framework,lock_cum_auth_acc=@my_address,user=@user,user_2=@user_2)]
     #[expected_failure(abort_code=393217)]
     public entry fun slot_id_incorrect_fail_test(supra_framework:&signer,lock_cum_auth_acc:&signer,user:&signer,user_2:&signer) acquires GlobalVars{
         create_multiple_predictions_on_multiple_slots_test(supra_framework,lock_cum_auth_acc,user,user_2);
-        update_final_price(lock_cum_auth_acc,11,8000000000);
+        update_final_price(lock_cum_auth_acc,11,string::utf8(b"8000000000"));
     }
 
     #[test(supra_framework=@supra_framework,lock_cum_auth_acc=@my_address,user=@user,user_2=@user_2)]
     #[expected_failure(abort_code=327685)]
     public entry fun not_auth_fail_test(supra_framework:&signer,lock_cum_auth_acc:&signer,user:&signer,user_2:&signer) acquires GlobalVars{
         create_multiple_predictions_on_multiple_slots_test(supra_framework,lock_cum_auth_acc,user,user_2);
-        update_final_price(user,11,8000000000);
+        update_final_price(user,11,string::utf8(b"8000000000"));
     }
 
     #[test(supra_framework=@supra_framework,lock_cum_auth_acc=@my_address,user=@user,user_2=@user_2)]
@@ -304,7 +283,7 @@ module my_address::slot_prediction{
         let slot_id_1=1;
 
         let start_time_1=timestamp::now_seconds() ;
-        let end_time_1=timestamp::now_seconds() + 60*60;
+        let start_price= string::utf8(b"2222");
         let option_nos_1=0;
         let start_time=20000;
         let options=vector::empty<String>();
@@ -312,7 +291,7 @@ module my_address::slot_prediction{
         vector::push_back(&mut options,string::utf8(b"+ 1-2 %"));
         vector::push_back(&mut options,string::utf8(b"- 0-4 %"));
         //Creating slot
-        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,start_time,end_time_1,options);
+        my_address::slot_prediction::create_slot(lock_cum_auth_acc,slot_id_1,start_time_1,start_time,start_price,options);
         // Predictions on first slot
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_1,option_nos_1);
         my_address::slot_prediction::create_prediction(user,slot_id_1,coins_2,option_nos_1);
